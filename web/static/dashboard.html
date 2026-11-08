@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MLCS Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #e8f2ef;
+            color: #333;
+            min-height: 100vh;
+        }
+        
+        .header {
+            background: linear-gradient(180deg, #f2f7f4 0%, #dce7e2 100%);
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #bccfc4;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .header h1 { 
+            font-size: 1.3em; 
+            color: #2d4a3e; 
+            font-weight: 600;
+            letter-spacing: -0.3px;
+        }
+        
+        .status {
+            display: flex;
+            gap: 18px;
+            font-size: 0.82em;
+            flex-wrap: wrap;
+            color: #4a5e54;
+        }
+        
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            border: 1px solid rgba(0,0,0,0.12);
+        }
+        
+        .status-dot.active { background: #6aab8e; }
+        .status-dot.warning { background: #c4a855; }
+        .status-dot.error { background: #c97070; }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 340px;
+            gap: 16px;
+            padding: 16px;
+            max-width: 1500px;
+            margin: 0 auto;
+        }
+        
+        .cameras-grid {
+            display: grid;
+            gap: 16px;
+            grid-template-columns: repeat(3, 1fr);
+        }
+        
+        .camera-card {
+            background: #ffffff;
+            border-radius: 4px;
+            overflow: hidden;
+            border: 1px solid #c8d6ce;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            transition: border-color 0.3s;
+            height: fit-content;
+        }
+        
+        .camera-card.active { 
+            border-color: #7db89a; 
+            box-shadow: 0 1px 4px rgba(125,184,154,0.18); 
+        }
+        .camera-card.reconnecting { border-color: #c4a855; }
+        
+        .camera-header {
+            background: #f4f8f6;
+            padding: 8px 14px;
+            font-weight: 600;
+            font-size: 0.88em;
+            color: #2d4a3e;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #dce7e2;
+        }
+        
+        .camera-status {
+            font-size: 0.85em;
+            font-weight: normal;
+        }
+        
+        .camera-status.online { color: #6aab8e; }
+        .camera-status.reconnecting { color: #b3923a; }
+        .camera-status.offline { color: #999; }
+        
+        .camera-feed {
+            position: relative;
+            background: #f2f4f2;
+            aspect-ratio: 4 / 3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-bottom: 1px solid #dce7e2;
+            overflow: hidden;
+        }
+
+        .camera-feed img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        
+        .no-signal {
+            color: #aabbb0;
+            text-align: center;
+            padding: 40px;
+            font-size: 1em;
+        }
+        
+        .camera-stats {
+            padding: 8px 14px;
+            display: flex;
+            gap: 20px;
+            justify-content: space-around;
+            background: #fafcfa;
+        }
+        
+        .stat {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .stat-value { 
+            font-size: 1.3em; 
+            font-weight: 600; 
+            color: #3d7a5c;
+            transition: color 0.3s;
+        }
+        
+        .stat-value.zero { color: #c0cec6; }
+        
+        .stat-label { 
+            font-size: 0.68em; 
+            color: #8a9e92; 
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        
+        .sidebar {
+            background: #ffffff;
+            border-radius: 4px;
+            padding: 18px;
+            border: 1px solid #c8d6ce;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            position: sticky;
+            top: 16px;
+            max-height: calc(100vh - 32px);
+            overflow-y: auto;
+        }
+        
+        .sidebar h2 { 
+            margin-bottom: 14px; 
+            color: #2d4a3e;
+            font-size: 1em;
+            font-weight: 600;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #dce7e2;
+        }
+        
+        .sidebar h3 {
+            color: #5a7566;
+            font-size: 0.82em;
+            font-weight: 600;
+            margin: 14px 0 8px 0;
+            padding-top: 10px;
+            border-top: 1px solid #e8f0ea;
+        }
+        
+        .sidebar h3:first-of-type {
+            border-top: none;
+            margin-top: 0;
+            padding-top: 0;
+        }
+        
+        .control-group { 
+            margin-bottom: 10px; 
+        }
+        
+        .control-group label {
+            display: block;
+            font-size: 0.76em;
+            color: #5a7566;
+            margin-bottom: 2px;
+        }
+        
+        .control-group input[type="range"] {
+            width: 100%;
+            accent-color: #7db89a;
+            height: 3px;
+            background: #dce7e2;
+        }
+        
+        .control-group input[type="range"]::-webkit-slider-thumb {
+            background: #6aab8e;
+            border: 1px solid #5a9578;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        
+        .control-group .value {
+            float: right;
+            color: #3d7a5c;
+            font-weight: 600;
+            font-size: 0.85em;
+        }
+        
+        .control-group .description {
+            font-size: 0.65em;
+            color: #9ab3a4;
+            margin-top: 1px;
+        }
+        
+        .btn {
+            background: linear-gradient(180deg, #f8faf8 0%, #e2eae4 100%);
+            color: #3d4a42;
+            border: 1px solid #bccfc4;
+            padding: 6px 14px;
+            border-radius: 3px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 4px;
+            font-size: 0.85em;
+            font-weight: 500;
+            transition: all 0.15s;
+        }
+        
+        .btn:hover { 
+            background: linear-gradient(180deg, #eef6f0 0%, #d8e5dc 100%);
+            border-color: #9abeaa;
+        }
+        
+        .btn:active {
+            background: #d4e0d8;
+        }
+        
+        .btn-secondary { 
+            background: linear-gradient(180deg, #f0f5f2 0%, #dce7e2 100%);
+            border-color: #b8cfc0;
+            margin-top: 8px;
+            color: #3d4a42;
+        }
+        .btn-secondary:hover { 
+            background: linear-gradient(180deg, #e4f0e8 0%, #cddbd2 100%);
+        }
+        
+        .btn-danger {
+            background: linear-gradient(180deg, #faf8f8 0%, #f0e8e8 100%);
+            border-color: #d4c8c8;
+            margin-top: 3px;
+            font-size: 0.78em;
+            color: #8b6565;
+        }
+        .btn-danger:hover { 
+            background: linear-gradient(180deg, #f5eaea 0%, #e8dada 100%);
+            border-color: #c0aaaa;
+        }
+        
+        .section-collapsed .section-content {
+            display: none;
+        }
+        
+        .section-header {
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .section-header .arrow {
+            transition: transform 0.2s;
+            font-size: 0.65em;
+            color: #8a9e92;
+        }
+        
+        .section-collapsed .arrow {
+            transform: rotate(-90deg);
+        }
+        
+        .coords-row {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .coords-row .control-group {
+            flex: 1;
+        }
+        
+        .debug {
+            margin-top: 12px;
+            padding: 7px 9px;
+            background: #f8faf8;
+            border: 1px solid #dce7e2;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 0.62em;
+            max-height: 130px;
+            overflow-y: auto;
+            color: #5a7566;
+            word-break: break-all;
+            line-height: 1.5;
+        }
+        
+        @media (max-width: 900px) {
+            .main-content { grid-template-columns: 1fr; }
+            .sidebar { position: static; max-height: none; }
+            .cameras-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <img src="/static/assets/logo.png" alt="Logo" style="height: 38px; width: auto;">
+            <h1>Приборная панель</h1>
+        </div>
+        <div class="status">
+            <div class="status-item">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="statusText">Connecting...</span>
+            </div>
+            <div class="status-item">
+                <span>Cameras: <strong id="activeCameras">0</strong>/<span id="totalCameras">0</span></span>
+            </div>
+            <div class="status-item">
+                <span>ReID: <strong id="reidCount">0</strong></span>
+            </div>
+            <div class="status-item">
+                <span>Tracks: <strong id="totalTracks">0</strong></span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="main-content">
+        <div class="cameras-grid" id="camerasGrid">
+            <div style="text-align: center; padding: 40px; color: #666;">
+                Ожидание информации...
+            </div>
+        </div>
+        
+        <div class="sidebar" id="sidebar">
+            <h2>Управление</h2>
+            
+            <!-- Line Counter -->
+            <div class="section-header" onclick="Dashboard.toggleSection(this)">
+                <h3>Line Counter</h3>
+                <span class="arrow">&#9660;</span>
+            </div>
+            <div class="section-content">
+                <div class="control-group">
+                    <label>Active Camera</label>
+                    <select id="lineCam" style="width:100%; padding:4px; background:#fff; border:1px solid #c8d6ce; border-radius:3px;">
+                        <option value="0">Camera 0</option>
+                    </select>
+                </div>
+                
+                <div class="control-group">
+                    <label>Line Type</label>
+                    <select id="lineType" style="width:100%; padding:4px; background:#fff; border:1px solid #c8d6ce; border-radius:3px;">
+                        <option value="straight">Straight</option>
+                        <option value="l_shaped">L-Shaped</option>
+                    </select>
+                </div>
+                
+                <div class="coords-row">
+                    <div class="control-group">
+                        <label>X: <strong id="lineXVal">320</strong></label>
+                        <input type="range" id="lineX" min="0" max="640" value="320" step="10">
+                    </div>
+                    <div class="control-group">
+                        <label>Y: <strong id="lineYVal">240</strong></label>
+                        <input type="range" id="lineY" min="0" max="480" value="240" step="10">
+                    </div>
+                </div>
+                <div class="description" style="margin-bottom: 8px;">Центр линии (X, Y)</div>
+                
+                <div class="control-group">
+                    <label>Length: <strong id="lineLenVal">200</strong>px</label>
+                    <input type="range" id="lineLen" min="40" max="600" value="200" step="10">
+                    <div class="description">Длина линии в пикселях</div>
+                </div>
+                
+                <div class="control-group">
+                    <label>Rotation: <strong id="rotationVal">0</strong>&deg;</label>
+                    <input type="range" id="rotation" min="-180" max="180" value="0" step="10" style="width:100%;">
+                </div>
+                
+                <button class="btn btn-secondary" onclick="Dashboard.toggleLine()">Enable Line</button>
+                <button class="btn btn-secondary" onclick="Dashboard.resetLine()">Reset Counter</button>
+                
+                <div style="margin-top:8px; padding:8px; background:#f8faf8; border-radius:3px; font-size:0.8em;">
+                    <div>IN: <strong id="countIn" style="color:#3d7a5c;">0</strong></div>
+                    <div>OUT: <strong id="countOut" style="color:#8b6565;">0</strong></div>
+                    <div>INSIDE: <strong id="countInside" style="color:#5a8db5;">0</strong></div>
+                </div>
+            </div>
+
+            <!-- График метрик -->
+            <div class="section-header" onclick="Dashboard.toggleSection(this)">
+                <h3>Live Metrics</h3>
+                <span class="arrow">&#9660;</span>
+            </div>
+            <div class="section-content">
+                <div style="position: relative; height: 220px; margin-bottom: 8px;">
+                    <canvas id="metricsChart"></canvas>
+                </div>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <label style="font-size: 0.7em; color: #5a7566;">
+                        <input type="checkbox" id="showTracks" checked onchange="Dashboard.toggleDataset()"> Tracks
+                    </label>
+                    <label style="font-size: 0.7em; color: #5a7566;">
+                        <input type="checkbox" id="showIn" checked onchange="Dashboard.toggleDataset()"> IN
+                    </label>
+                    <label style="font-size: 0.7em; color: #5a7566;">
+                        <input type="checkbox" id="showOut" checked onchange="Dashboard.toggleDataset()"> OUT
+                    </label>
+                    <label style="font-size: 0.7em; color: #5a7566;">
+                        <input type="checkbox" id="showInside" checked onchange="Dashboard.toggleDataset()"> INSIDE
+                    </label>
+                    <label style="font-size: 0.7em; color: #5a7566;">
+                        <input type="checkbox" id="showReID" checked onchange="Dashboard.toggleDataset()"> ReID Active
+                    </label>
+                </div>
+                <button class="btn btn-secondary" onclick="Dashboard.downloadChart()" style="margin-top: 8px;">
+                    💾 Скачать график (PNG)
+                </button>
+            </div>
+            
+            <!-- Detection -->
+            <div class="section-header" onclick="Dashboard.toggleSection(this)">
+                <h3>Detection</h3>
+                <span class="arrow">&#9660;</span>
+            </div>
+            <div class="section-content">
+                <div class="control-group">
+                    <label>Min Area Factor <span class="value" id="minAreaVal">0.015</span></label>
+                    <input type="range" id="minArea" min="1" max="100" value="15" step="1" data-param="min_area_factor" data-scale="1000" data-decimals="3">
+                    <div class="description">Минимальная площадь ограничивающего прямоугольника относительно рамки</div>
+                </div>
+                
+                <div class="control-group">
+                    <label>Min Height Factor <span class="value" id="minHeightVal">0.25</span></label>
+                    <input type="range" id="minHeight" min="5" max="100" value="25" step="1" data-param="min_height_factor" data-scale="100" data-decimals="2">
+                    <div class="description">Минимальная высота ограничивающего прямоугольника относительно рамки</div>
+                </div>
+            </div>
+            
+            <!-- Tracking -->
+            <div class="section-header" onclick="Dashboard.toggleSection(this)">
+                <h3>Tracking</h3>
+                <span class="arrow">&#9660;</span>
+            </div>
+            <div class="section-content">
+                <div class="control-group">
+                    <label>Distance Threshold <span class="value" id="distThreshVal">80</span></label>
+                    <input type="range" id="distThresh" min="10" max="200" value="80" step="1" data-param="distance_threshold" data-scale="1" data-decimals="0">
+                    <div class="description">Максимальное расстояние для объединения треков</div>
+                </div>
+                
+                <div class="control-group">
+                    <label>Min Age <span class="value" id="minAgeVal">12</span></label>
+                    <input type="range" id="minAge" min="1" max="100" value="12" step="1" data-param="min_age_for_count" data-scale="1" data-decimals="0">
+                    <div class="description">Минимальное количество кадров перед подтверждением трека</div>
+                </div>
+            </div>
+            
+            <!-- ReID -->
+            <div class="section-header" onclick="Dashboard.toggleSection(this)">
+                <h3>ReID Settings</h3>
+                <span class="arrow">&#9660;</span>
+            </div>
+            <div class="section-content">
+                <div class="control-group">
+                    <label>Similarity Threshold <span class="value" id="simThreshVal">0.57</span></label>
+                    <input type="range" id="simThresh" min="30" max="95" value="57" step="1" data-param="reid_similarity_threshold" data-scale="100" data-decimals="2">
+                    <div class="description">Минимальное косинусное сходство для соответствия существующей идентичности</div>
+                </div>
+                
+                <div class="control-group">
+                    <label>Strong Threshold <span class="value" id="strongThreshVal">0.78</span></label>
+                    <input type="range" id="strongThresh" min="50" max="98" value="78" step="1" data-param="reid_strong_threshold" data-scale="100" data-decimals="2">
+                    <div class="description">Порог сходства для добавления нового образца в галерею</div>
+                </div>
+                
+                <div class="control-group">
+                    <label>Max Age <span class="value" id="maxAgeVal">30</span>s</label>
+                    <input type="range" id="maxAge" min="5" max="120" value="30" step="1" data-param="reid_max_age" data-scale="1" data-decimals="0">
+                    <div class="description">Время, необходимое для сохранения личности после исчезновения</div>
+                </div>
+                
+                <div class="control-group">
+                    <label>Gallery Size <span class="value" id="gallerySizeVal">5</span></label>
+                    <input type="range" id="gallerySize" min="1" max="10" value="5" step="1" data-param="reid_max_gallery_size" data-scale="1" data-decimals="0">
+                    <div class="description">Максимальное количество вложений, сохраняемых для каждого идентификатора</div>
+                </div>
+                
+                <div class="control-group">
+                    <label>EMA Alpha <span class="value" id="alphaVal">0.3</span></label>
+                    <input type="range" id="alpha" min="5" max="80" value="30" step="1" data-param="reid_alpha" data-scale="100" data-decimals="2">
+                    <div class="description">Коэффициент сглаживания экспоненциальной скользящей средней</div>
+                </div>
+            </div>
+            
+            <button class="btn btn-secondary" onclick="Dashboard.resetAllParams()">Настройки по умолчанию</button>
+            <button class="btn btn-danger" onclick="Dashboard.resetReID()">Очистить базу данных ReID</button>
+            <button class="btn" onclick="Dashboard.reconnect()">Переподключение к системе</button>
+            
+            <div class="debug" id="debug">
+                Debug log...
+            </div>
+        </div>
+    </div>
+    
+    <script>
+    const Dashboard = (function() {
+        // Приватные переменные
+        let ws = null;
+        let reconnectTimer = null;
+        let totalCameras = 0;
+        let camerasInitialized = false;
+        let lineEnabled = false;
+        let cameraElements = {};
+        
+        // Переменные для графика
+        let metricsChart = null;
+        let chartData = {
+            labels: [],
+            tracks: [],
+            inCount: [],
+            outCount: [],
+            inside: [],
+            reidActive: []
+        };
+        const MAX_CHART_POINTS = 300;
+        
+        // Кеш DOM-элементов
+        const DOM = {};
+        
+        // Приватные функции
+        function initDOM() {
+            DOM.statusDot = document.getElementById('statusDot');
+            DOM.statusText = document.getElementById('statusText');
+            DOM.activeCameras = document.getElementById('activeCameras');
+            DOM.totalCameras = document.getElementById('totalCameras');
+            DOM.reidCount = document.getElementById('reidCount');
+            DOM.totalTracks = document.getElementById('totalTracks');
+            DOM.camerasGrid = document.getElementById('camerasGrid');
+            DOM.countIn = document.getElementById('countIn');
+            DOM.countOut = document.getElementById('countOut');
+            DOM.countInside = document.getElementById('countInside');
+            DOM.lineCam = document.getElementById('lineCam');
+            DOM.lineType = document.getElementById('lineType');
+            DOM.lineX = document.getElementById('lineX');
+            DOM.lineY = document.getElementById('lineY');
+            DOM.lineLen = document.getElementById('lineLen');
+            DOM.lineXVal = document.getElementById('lineXVal');
+            DOM.lineYVal = document.getElementById('lineYVal');
+            DOM.lineLenVal = document.getElementById('lineLenVal');
+            DOM.rotation = document.getElementById('rotation');
+            DOM.rotationVal = document.getElementById('rotationVal');
+            DOM.debug = document.getElementById('debug');
+        }
+        
+        function log(msg) { 
+            if (!DOM.debug) return;
+            DOM.debug.innerHTML = `[${new Date().toLocaleTimeString()}] ${msg}<br>` + DOM.debug.innerHTML; 
+            const lines = DOM.debug.innerHTML.split('<br>'); 
+            if (lines.length > 15) DOM.debug.innerHTML = lines.slice(0, 15).join('<br>'); 
+            console.log(msg); 
+        }
+        
+        function debounce(fn, delay) {
+            let timer;
+            return function(...args) {
+                clearTimeout(timer);
+                timer = setTimeout(() => fn.apply(this, args), delay);
+            };
+        }
+        
+        function createCameraCards(count) {
+            DOM.camerasGrid.innerHTML = ''; 
+            DOM.camerasGrid.className = 'cameras-grid';
+            cameraElements = {};
+            
+            for (let i = 0; i < count; i++) {
+                const c = document.createElement('div'); 
+                c.className = 'camera-card'; 
+                c.id = `card-${i}`;
+                c.innerHTML = `<div class="camera-header"><span>Camera ${i}</span><span class="camera-status offline" id="cam${i}-status">Offline</span></div><div class="camera-feed" id="feed-${i}"><div class="no-signal">Waiting for signal...</div></div><div class="camera-stats"><div class="stat"><span class="stat-value zero" id="fps-${i}">--</span><span class="stat-label">FPS</span></div><div class="stat"><span class="stat-value zero" id="tracks-${i}">0</span><span class="stat-label">Tracks</span></div><div class="stat"><span class="stat-value zero" id="age-${i}">--</span><span class="stat-label">Avg Age</span></div></div>`;
+                DOM.camerasGrid.appendChild(c);
+                
+                cameraElements[i] = {
+                    fps: document.getElementById(`fps-${i}`),
+                    tracks: document.getElementById(`tracks-${i}`),
+                    age: document.getElementById(`age-${i}`),
+                    status: document.getElementById(`cam${i}-status`),
+                    card: document.getElementById(`card-${i}`),
+                    feed: document.getElementById(`feed-${i}`)
+                };
+            }
+            camerasInitialized = true; 
+            log(`Created ${count} cameras`);
+        }
+        
+        function connect() {
+            const u = `ws://${window.location.host}/ws`;
+            try { ws = new WebSocket(u); } 
+            catch(e) { scheduleReconnect(); return; }
+            
+            ws.onopen = () => {
+                log('Connected');
+                DOM.statusDot.className = 'status-dot active';
+                DOM.statusText.textContent = 'Connected';
+                if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+                setTimeout(() => {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({type: 'get_params'}));
+                    }
+                }, 500);
+            };
+            
+            ws.onmessage = (e) => {
+                try {
+                    const d = JSON.parse(e.data);
+                    if (d.type === 'system_info') {
+                        if (!camerasInitialized || d.cameras !== totalCameras) {
+                            totalCameras = d.cameras;
+                            createCameraCards(d.cameras);
+                        }
+                        DOM.totalCameras.textContent = d.cameras;
+                        DOM.reidCount.textContent = d.reid_active || 0;
+                        updateLineCamSelect(d.cameras);
+                    }
+                    if (d.type === 'frame_update') {
+                        updateFrames(d.frames);
+                        updateMetrics(d.metrics);
+                        updateSystem(d.system);
+                        Dashboard.updateChart(d.metrics, d.system);
+                    }
+                } catch(ex) {}
+            };
+            
+            ws.onclose = () => {
+                DOM.statusDot.className = 'status-dot error';
+                DOM.statusText.textContent = 'Disconnected';
+                scheduleReconnect();
+            };
+            
+            ws.onerror = () => {
+                DOM.statusDot.className = 'status-dot warning';
+            };
+        }
+        
+        function scheduleReconnect() {
+            if (!reconnectTimer) {
+                DOM.statusText.textContent = 'Reconnecting...';
+                reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, 2000);
+            }
+        }
+        
+        function updateLineCamSelect(count) {
+            DOM.lineCam.innerHTML = ''; 
+            for (let i = 0; i < count; i++) {
+                const o = document.createElement('option'); 
+                o.value = i; 
+                o.textContent = `Camera ${i}`; 
+                DOM.lineCam.appendChild(o);
+            }
+        }
+        
+        function updateFrames(frames) {
+            if (!frames) return;
+            for (const [camId, frameData] of Object.entries(frames)) {
+                const els = cameraElements[camId];
+                if (!els || !els.feed) continue;
+                
+                const f = els.feed;
+                if (!frameData) {
+                    if (!f.querySelector('.no-signal')) f.innerHTML = '<div class="no-signal">No signal</div>';
+                    continue;
+                }
+                
+                let img = f.querySelector('img'); 
+                if (!img) { f.innerHTML = ''; img = document.createElement('img'); f.appendChild(img); }
+                const src = `data:image/jpeg;base64,${frameData}`; 
+                if (img.src !== src) img.src = src;
+            }
+        }
+        
+        function updateMetrics(metrics) {
+            if (!metrics) return; 
+            let totalTracksSum = 0;
+            
+            for (const [camId, cm] of Object.entries(metrics)) {
+                const els = cameraElements[camId];
+                if (!els) continue;
+                
+                if (els.fps) { 
+                    els.fps.textContent = cm.fps > 0 ? cm.fps : '--'; 
+                    els.fps.className = cm.fps > 0 ? 'stat-value' : 'stat-value zero'; 
+                }
+                if (els.tracks) { 
+                    els.tracks.textContent = cm.tracks || 0; 
+                    els.tracks.className = cm.tracks > 0 ? 'stat-value' : 'stat-value zero'; 
+                }
+                if (els.age) { 
+                    els.age.textContent = cm.avg_age > 0 ? cm.avg_age : '--'; 
+                    els.age.className = cm.avg_age > 0 ? 'stat-value' : 'stat-value zero'; 
+                }
+                totalTracksSum += cm.tracks || 0;
+                
+                if (els.status) {
+                    if (cm.reconnecting) { 
+                        els.status.textContent = 'Reconnecting...'; 
+                        els.status.className = 'camera-status reconnecting'; 
+                    } else if (cm.errors > 0) { 
+                        els.status.textContent = `Errors: ${cm.errors}`; 
+                        els.status.className = 'camera-status reconnecting'; 
+                    } else if (cm.fps > 0) { 
+                        els.status.textContent = 'Online'; 
+                        els.status.className = 'camera-status online'; 
+                    } else { 
+                        els.status.textContent = 'Offline'; 
+                        els.status.className = 'camera-status offline'; 
+                    }
+                }
+                
+                if (els.card) {
+                    els.card.className = 'camera-card';
+                    if (cm.reconnecting) els.card.classList.add('reconnecting');
+                    else if (cm.fps > 0) els.card.classList.add('active');
+                }
+                
+                if (cm.line_counts && camId == DOM.lineCam.value) {
+                    DOM.countIn.textContent = cm.line_counts.in || 0;
+                    DOM.countOut.textContent = cm.line_counts.out || 0;
+                    DOM.countInside.textContent = cm.line_counts.inside || 0;
+                }
+            }
+            DOM.totalTracks.textContent = totalTracksSum;
+        }
+        
+        function updateSystem(system) {
+            if (!system) return;
+            DOM.reidCount.textContent = system.reid_active || 0;
+            DOM.activeCameras.textContent = system.total_cameras || 0;
+        }
+        
+        function sendLineUpdate() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+            
+            const camId = parseInt(DOM.lineCam.value);
+            const lt = DOM.lineType.value;
+            const cx = parseInt(DOM.lineX.value);
+            const cy = parseInt(DOM.lineY.value);
+            const length = parseInt(DOM.lineLen.value);
+            const angle = parseInt(DOM.rotation.value);
+            
+            const halfLen = length / 2;
+            const rad = angle * Math.PI / 180;
+            const dx = halfLen * Math.cos(rad);
+            const dy = halfLen * Math.sin(rad);
+            
+            const x1 = Math.round(cx - dx);
+            const y1 = Math.round(cy - dy);
+            const x2 = Math.round(cx + dx);
+            const y2 = Math.round(cy + dy);
+            
+            let pts;
+            if (lt === 'straight') {
+                pts = [[x1, y1], [x2, y2]];
+            } else {
+                pts = [[x1, y1], [cx, cy], [x2, y2]];
+            }
+            
+            ws.send(JSON.stringify({ type: 'set_line', cam_id: camId, line_type: lt, points: pts }));
+            ws.send(JSON.stringify({ type: 'rotate_line', cam_id: camId, angle: angle }));
+            log(`Line: ${lt}, center=(${cx},${cy}), len=${length}, angle=${angle}°`);
+        }
+        
+        function setupControls() {
+            document.querySelectorAll('input[type="range"][data-param]').forEach(s => {
+                const param = s.dataset.param;
+                const scale = parseFloat(s.dataset.scale) || 1;
+                const decimals = parseInt(s.dataset.decimals) || 0;
+                const display = document.getElementById(s.id + 'Val');
+                if (display) display.textContent = (s.value / scale).toFixed(decimals);
+                
+                const sendParam = debounce(() => {
+                    const v = (s.value / scale).toFixed(decimals);
+                    if (display) display.textContent = v;
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: 'set_param', param: param, value: parseFloat(v) }));
+                    }
+                }, 150);
+                
+                s.addEventListener('input', () => {
+                    const v = (s.value / scale).toFixed(decimals);
+                    if (display) display.textContent = v;
+                    sendParam();
+                });
+            });
+            
+            const lineSliders = [
+                { slider: DOM.lineX, display: DOM.lineXVal },
+                { slider: DOM.lineY, display: DOM.lineYVal },
+                { slider: DOM.lineLen, display: DOM.lineLenVal }
+            ];
+            
+            lineSliders.forEach(({slider, display}) => {
+                if (!slider || !display) return;
+                
+                const sendLine = debounce(() => {
+                    display.textContent = slider.value;
+                    if (lineEnabled) sendLineUpdate();
+                }, 100);
+                
+                slider.addEventListener('input', () => {
+                    display.textContent = slider.value;
+                    sendLine();
+                });
+            });
+            
+            if (DOM.rotation) {
+                DOM.rotation.step = 10;
+                
+                const sendRotation = debounce(() => {
+                    const angle = parseInt(DOM.rotation.value);
+                    DOM.rotationVal.textContent = angle;
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        const camId = parseInt(DOM.lineCam.value);
+                        ws.send(JSON.stringify({ type: 'rotate_line', cam_id: camId, angle: angle }));
+                    }
+                }, 100);
+                
+                DOM.rotation.addEventListener('input', () => {
+                    DOM.rotationVal.textContent = DOM.rotation.value;
+                    sendRotation();
+                });
+            }
+            
+            if (DOM.lineType) {
+                DOM.lineType.addEventListener('change', function() {
+                    if (!lineEnabled) return;
+                    sendLineUpdate();
+                });
+            }
+        }
+        
+        // Методы для графика
+        function initChart() {
+            const ctx = document.getElementById('metricsChart').getContext('2d');
+            metricsChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: chartData.labels,
+                    datasets: [
+                        {
+                            label: 'Tracks',
+                            data: chartData.tracks,
+                            borderColor: '#3d7a5c',
+                            backgroundColor: 'rgba(61,122,92,0.1)',
+                            borderWidth: 1.5,
+                            pointRadius: 0,
+                            tension: 0.3
+                        },
+                        {
+                            label: 'IN',
+                            data: chartData.inCount,
+                            borderColor: '#5a8db5',
+                            backgroundColor: 'rgba(90,141,181,0.1)',
+                            borderWidth: 1.5,
+                            pointRadius: 0,
+                            tension: 0.3,
+                            stepped: true
+                        },
+                        {
+                            label: 'OUT',
+                            data: chartData.outCount,
+                            borderColor: '#8b6565',
+                            backgroundColor: 'rgba(139,101,101,0.1)',
+                            borderWidth: 1.5,
+                            pointRadius: 0,
+                            tension: 0.3,
+                            stepped: true
+                        },
+                        {
+                            label: 'INSIDE',
+                            data: chartData.inside,
+                            borderColor: '#c4a855',
+                            backgroundColor: 'rgba(196,168,85,0.15)',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            tension: 0.3
+                        },
+                        {
+                            label: 'ReID Active',
+                            data: chartData.reidActive,
+                            borderColor: '#9b6ebf',
+                            backgroundColor: 'rgba(155,110,191,0.1)',
+                            borderWidth: 1.5,
+                            borderDash: [5, 3],
+                            pointRadius: 0,
+                            tension: 0.3
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    scales: {
+                        x: {
+                            display: true,
+                            ticks: { maxTicksLimit: 6, font: { size: 9 }, color: '#8a9e92' },
+                            grid: { display: false }
+                        },
+                        y: {
+                            display: true,
+                            beginAtZero: true,
+                            ticks: { font: { size: 9 }, color: '#8a9e92' },
+                            grid: { color: '#e8f0ea' }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+        
+        function updateChart(metrics, system) {
+            if (!metricsChart) return;
+            
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            
+            // Добавляем точку только раз в секунду
+            if (chartData.labels.length > 0 && chartData.labels[chartData.labels.length - 1] === timeStr) {
+                // Обновляем последнюю точку (берём максимальные/последние значения за секунду)
+                let totalTracks = 0;
+                let totalIn = 0;
+                let totalOut = 0;
+                let totalInside = 0;
+                
+                for (const [camId, cm] of Object.entries(metrics || {})) {
+                    totalTracks += cm.tracks || 0;
+                    if (cm.line_counts) {
+                        totalIn = Math.max(totalIn, cm.line_counts.in || 0);
+                        totalOut = Math.max(totalOut, cm.line_counts.out || 0);
+                        totalInside = Math.max(totalInside, cm.line_counts.inside || 0);
+                    }
+                }
+                
+                // Перезаписываем последние значения
+                const last = chartData.labels.length - 1;
+                chartData.tracks[last] = totalTracks;
+                chartData.inCount[last] = totalIn;
+                chartData.outCount[last] = totalOut;
+                chartData.inside[last] = totalInside;
+                chartData.reidActive[last] = system?.reid_active || 0;
+            } else {
+                // Новая секунда — добавляем новую точку
+                chartData.labels.push(timeStr);
+                
+                let totalTracks = 0;
+                let totalIn = 0;
+                let totalOut = 0;
+                let totalInside = 0;
+                
+                for (const [camId, cm] of Object.entries(metrics || {})) {
+                    totalTracks += cm.tracks || 0;
+                    if (cm.line_counts) {
+                        totalIn += cm.line_counts.in || 0;
+                        totalOut += cm.line_counts.out || 0;
+                        totalInside += cm.line_counts.inside || 0;
+                    }
+                }
+                
+                chartData.tracks.push(totalTracks);
+                chartData.inCount.push(totalIn);
+                chartData.outCount.push(totalOut);
+                chartData.inside.push(totalInside);
+                chartData.reidActive.push(system?.reid_active || 0);
+            }
+            
+            // Ограничение буфера: 10 минут = 600 секунд
+            const MAX_POINTS = 600;
+            while (chartData.labels.length > MAX_POINTS) {
+                chartData.labels.shift();
+                chartData.tracks.shift();
+                chartData.inCount.shift();
+                chartData.outCount.shift();
+                chartData.inside.shift();
+                chartData.reidActive.shift();
+            }
+            
+            metricsChart.data.labels = chartData.labels;
+            metricsChart.data.datasets[0].data = chartData.tracks;
+            metricsChart.data.datasets[1].data = chartData.inCount;
+            metricsChart.data.datasets[2].data = chartData.outCount;
+            metricsChart.data.datasets[3].data = chartData.inside;
+            metricsChart.data.datasets[4].data = chartData.reidActive;
+            
+            metricsChart.update('none');
+        }
+        
+        function toggleDataset() {
+            if (!metricsChart) return;
+            const checkboxes = ['showTracks', 'showIn', 'showOut', 'showInside', 'showReID'];
+            checkboxes.forEach((id, i) => {
+                const cb = document.getElementById(id);
+                if (cb && metricsChart.data.datasets[i]) {
+                    metricsChart.data.datasets[i].hidden = !cb.checked;
+                }
+            });
+            metricsChart.update('none');
+        }
+        
+        function downloadChart() {
+            if (!metricsChart) return;
+            const link = document.createElement('a');
+            link.download = `metrics_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.png`;
+            link.href = metricsChart.canvas.toDataURL('image/png');
+            link.click();
+        }
+        
+        // Публичные методы
+        return {
+            toggleSection(h) {
+                h.parentElement.classList.toggle('section-collapsed');
+            },
+            
+            toggleLine() {
+                lineEnabled = !lineEnabled;
+                const camId = parseInt(DOM.lineCam.value);
+                const btn = document.querySelector('#sidebar .btn-secondary');
+                
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'toggle_line', cam_id: camId, enabled: lineEnabled }));
+                    
+                    if (lineEnabled) {
+                        sendLineUpdate();
+                        if (btn) btn.textContent = 'Disable Line';
+                    } else {
+                        if (btn) btn.textContent = 'Enable Line';
+                    }
+                }
+            },
+            
+            resetLine() {
+                const camId = parseInt(DOM.lineCam.value);
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'reset_counts', cam_id: camId }));
+                    DOM.countIn.textContent = '0';
+                    DOM.countOut.textContent = '0';
+                    DOM.countInside.textContent = '0';
+                }
+            },
+            
+            resetAllParams() {
+                const defaults = {
+                    minArea: 15, minHeight: 25, distThresh: 80, minAge: 12,
+                    simThresh: 57, strongThresh: 78, maxAge: 30, gallerySize: 5,
+                    alpha: 30
+                };
+                for (const [id, value] of Object.entries(defaults)) {
+                    const el = document.getElementById(id);
+                    if (el) { el.value = value; el.dispatchEvent(new Event('input')); }
+                }
+                const lineDefaults = { lineX: 320, lineY: 240, lineLen: 200 };
+                for (const [id, value] of Object.entries(lineDefaults)) {
+                    const el = DOM[id];
+                    const display = DOM[id + 'Val'];
+                    if (el) el.value = value;
+                    if (display) display.textContent = value;
+                }
+                DOM.rotation.value = 0;
+                DOM.rotationVal.textContent = '0';
+                if (lineEnabled) sendLineUpdate();
+            },
+            
+            resetReID() {
+                if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'clear_reid' }));
+            },
+            
+            reconnect() {
+                if (ws) ws.close();
+                if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+                setTimeout(connect, 500);
+            },
+            
+            initChart: initChart,
+            updateChart: updateChart,
+            toggleDataset: toggleDataset,
+            downloadChart: downloadChart,
+            
+            init() {
+                initDOM();
+                setupControls();
+                initChart();
+                connect();
+            }
+        };
+    })();
+    
+    document.addEventListener('DOMContentLoaded', () => Dashboard.init());
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && (!Dashboard.ws || Dashboard.ws.readyState !== WebSocket.OPEN)) {
+            Dashboard.reconnect();
+        }
+    });
+    </script>
+</body>
+</html>
