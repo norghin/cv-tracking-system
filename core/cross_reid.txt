@@ -1,0 +1,38 @@
+import time
+import numpy as np
+
+class CrossCameraReIDBuffer:
+    def __init__(self, max_age: float = 5.0):
+        self.max_age = max_age
+        self.buffer = {}
+
+    def add_disappeared(self, cam_id: int, global_id: int, embedding: np.ndarray):
+        ts = time.time()
+        if cam_id not in self.buffer:
+            self.buffer[cam_id] = []
+        self.buffer[cam_id].append((ts, global_id, embedding))
+        self._cleanup(cam_id)
+
+    def _cleanup(self, cam_id: int):
+        now = time.time()
+        if cam_id in self.buffer:
+            self.buffer[cam_id] = [
+                (ts, gid, emb) for ts, gid, emb in self.buffer[cam_id]
+                if now - ts <= self.max_age
+            ]
+
+    def match_new(self, cam_id: int, embedding: np.ndarray, reid_model, other_cam_id: int):
+
+        self._cleanup(other_cam_id)
+        if other_cam_id not in self.buffer:
+            return None
+
+        best_gid, best_sim = None, -1.0
+        for ts, gid, emb in self.buffer[other_cam_id]:
+            sim = reid_model._best_similarity(embedding, [emb])
+            if sim > best_sim:
+                best_sim, best_gid = sim, gid
+
+        if best_gid is not None and best_sim >= reid_model.similarity_threshold:
+            return best_gid
+        return None
