@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Сборка (PyInstaller и т.д.)
+build/
+dist/
+*.spec
+
+# Модели и веса (большие файлы)
+*.pt
+*.pth
+*.onnx
+weights/
+models/
+
+# Данные, логи, бенчмарки
+*.log
+logs/
+*.csv
+*.jsonl
+data/
+videos/
+*.mp4
+*.avi
+detector_benchmark.json
+
+# Внешние репозитории/библиотеки (если ByteTrack не твой код)
+ByteTrack/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# ОС
+.DS_Store
+Thumbs.db
